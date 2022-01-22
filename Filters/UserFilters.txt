@@ -1,0 +1,214 @@
+<?php
+
+namespace App\Models\Filters;
+
+use App\Models\AdminCompany;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+
+class UserFilters implements Filters
+{
+
+    /**
+     * @var Request
+     */
+    protected $request;
+
+    /**
+     * @param Request $request
+     */
+    public function __construct(Request $request)
+    {
+        $this->request = $request;
+    }
+
+    /**
+     * Get query after apply filters
+     *
+     * @param  Builder $query
+     * @return Builder
+     */
+    public function getQuery(Builder $query): Builder
+    {
+        $this->filterByName($query);
+        $this->filterByEmail($query);
+        $this->filterByPesonInCharge($query);
+        $this->filterByStatus($query);
+        $this->filterByAcademyType($query);
+        $this->sorftByField($query);
+        $this->filterByStatusStudy($query);
+        $this->filterByTeacher($query);
+        $this->filterByStudyStartDate($query);
+
+        return $query;
+    }
+
+    /**
+     * Apply filter by teacher id
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByTeacher(Builder $query): void
+    {
+        $teacher_id = $this->request->query('teacher_id');
+        $check = $teacher_id || $teacher_id === '0' ? true : false;
+
+        $query->when($check, function (Builder $q) use ($teacher_id) {
+            $q->where('teacher_ids', 'LIKE', "%{$teacher_id}%");
+        });
+    }
+
+    /**
+     * Apply filter by study status
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByStatusStudy(Builder $query): void
+    {
+        $study_status = $this->request->query('study_status');
+        $check = $study_status || $study_status === '0' ? true : false;
+
+        $query->when($check, function (Builder $q) use ($study_status) {
+            $q->where('study_status', $study_status);
+        });
+    }
+
+    /**
+     * Apply filter by study start date
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByStudyStartDate(Builder $query): void
+    {
+        $study_start_date = $this->request->query('study_start_date');
+        $check = $study_start_date || $study_start_date === '0' ? true : false;
+
+        $query->when($check, function (Builder $q) use ($study_start_date) {
+            $temp['monthYear'] = $study_start_date;
+            $data_date = $this->getMonthYear($temp);
+            $q->whereYear('study_start_date', $data_date['year'])
+                ->whereMonth('study_start_date', $data_date['month']);
+        });
+    }
+
+    /**
+     * Apply filter by name
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByName(Builder $query): void
+    {
+        $name = $this->request->query('name');
+        $check = $name || $name === '0' ? true : false;
+
+        $query->when($check, function (Builder $q) use ($name) {
+            $q->where(function($q) use ($name) {
+                return $q->where('users.name', 'LIKE', "%{$name}%")
+                    ->orWhere('users.name_furigana', 'LIKE', "%$name%");
+            });
+        });
+    }
+
+    /**
+     * Apply filter by email
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByEmail(Builder $query): void
+    {
+        $query->when($this->request->query('email'), function (Builder $q, $email) {
+            $q->where('email', 'LIKE', "%{$email}%");
+        });
+    }
+
+    /**
+     * Apply filter by peson in Charge
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByPesonInCharge(Builder $query): void
+    {
+        $query->when($this->request->query('person_in_charge_name'), function (Builder $q, $person_in_charge_name) {
+            $person_in_charge_ids = AdminCompany::query()
+                ->where('name', 'LIKE', "%{$person_in_charge_name}%")
+                ->get()
+                ->pluck('id');
+
+            $q->whereIn('person_in_charge_id', $person_in_charge_ids);
+        });
+    }
+
+    /**
+     * Apply filter by status
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByStatus(Builder $query): void
+    {
+        $status = $this->request->query('status');
+        $check = $status || $status === '0' ? true : false;
+
+        $query->when($check, function (Builder $q) use ($status) {
+            $q->where('users.status', 'LIKE', "%{$status}%");
+        });
+    }
+
+    /**
+     * Apply filter by Academy Type
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function filterByAcademyType(Builder $query): void
+    {
+        $query->when($this->request->query('academy_type'), function (Builder $q, $academy_type) {
+            $q->where('academy_type', 'LIKE', "%{$academy_type}%");
+        });
+    }
+
+    /**
+     * Apply sorft by field
+     *
+     * @param  Builder $query
+     * @return void
+     */
+    protected function sorftByField(Builder $query): void
+    {
+        $order = $this->request->query('order') ? : 'ASC';
+        $query->when($this->request->query('sort_by'), function (Builder $q, $sort_by) use ($order) {
+            $q->orderBy($sort_by, $order);
+        });
+    }
+
+    function getMonthYear($monthYear)
+    {
+        if ($monthYear) {
+            $arr = explode('/', $monthYear['monthYear']);
+            $year = (int) $arr[0];
+            $month = (int) $arr[1];
+        } else {
+            $year = Carbon::now()->year;
+            $month = Carbon::now()->month;
+        }
+
+        if ($month == 1) {
+            $lastMonth = 12;
+        } else {
+            $lastMonth = $month - 1;
+        }
+
+        return [
+            'month' => $month,
+            'year' => $year,
+            'lastmonth' => $lastMonth
+        ];
+    }
+}

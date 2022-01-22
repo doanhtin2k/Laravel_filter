@@ -1,0 +1,3 @@
+VD  $clients = Client::query()
+            ->filters(new ClientFilters($request))
+            ->paginate($request->input('limit', 15));
